@@ -1,10 +1,5 @@
 # PyInstaller recipe for PodSim.exe. Build with:  pyinstaller podsim.spec --noconfirm
-from PyInstaller.utils.hooks import collect_dynamic_libs, get_package_paths
-
-# The ViGEmBus driver installer that comes with vgamepad. It goes into the exe
-# at the same place inside vgamepad, so binder.vigem_installer() finds it.
-VIGEM_INSTALL = "win/vigem/install/x64"
-vgamepad_folder = get_package_paths("vgamepad")[1]
+from PyInstaller.utils.hooks import collect_dynamic_libs
 
 a = Analysis(
     ["podsim/gui.py"],
@@ -15,8 +10,10 @@ a = Analysis(
         ("Devices/EVO_OMNI.jpg", "Devices"),
         ("media/icon.ico", "media"),
         ("default_config.json", "."),
-        (f"{vgamepad_folder}/{VIGEM_INSTALL}/ViGEmBusSetup_x64.msi", f"vgamepad/{VIGEM_INSTALL}"),
+        # The ViGEmBus driver installer (binder.vigem_installer() finds it).
+        ("drivers/ViGEmBus_1.22.0_x64_x86_arm64.exe", "drivers"),
     ],
+    hiddenimports=["vgamepad"],  # binder imports it inside start(), not at the top
 )
 splash = Splash(
     "media/splash.png",

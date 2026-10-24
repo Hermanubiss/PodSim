@@ -4,7 +4,7 @@ import shutil
 import sys
 from pathlib import Path
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 
 # True when running as PodSim.exe (PyInstaller sets sys.frozen).
 FROZEN = getattr(sys, "frozen", False)

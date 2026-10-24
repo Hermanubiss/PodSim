@@ -4,10 +4,17 @@ Two flight sticks in, one virtual Xbox 360 pad out, for Star Wars Galactic Racer
 
 ## Use it
 1. Run `PodSim.exe` (from a release, or `dist\PodSim` after building).
-2. Home tab: if the ViGEmBus driver is missing, click **Install driver**.
+2. Home tab: if the ViGEmBus driver is missing, click **Install driver**,
+   click through the installer, then restart your PC.
 3. Plug in your sticks, set the bindings on the stick tabs, click **Start**.
 
 Settings live in `%APPDATA%\PodSim`.
+
+If Start says the driver isn't answering (VIGEM_ERROR_BUS_NOT_FOUND), restart
+your PC. Still failing? Click Yes when PodSim offers to reinstall it, then restart.
+
+`drivers/` holds the official ViGEmBus 1.22.0 installer by Nefarius
+(github.com/nefarius/ViGEmBus, BSD-3-Clause license).
 
 ## Run from source
     pip install pyside6 pygame-ce vgamepad

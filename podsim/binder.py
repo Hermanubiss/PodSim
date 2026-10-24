@@ -12,7 +12,6 @@
 import ctypes
 import os
 import subprocess
-from pathlib import Path
 
 # Must be set BEFORE pygame is imported, or SDL ignores it.
 # Lets the sticks update even when this window isn't focused.
@@ -21,9 +20,13 @@ os.environ["SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS"] = "1"
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 
 import pygame  # noqa: E402  (this late import is on purpose)
-import vgamepad as vg  # noqa: E402
+
+# vgamepad is NOT imported up here: it connects to the ViGEmBus driver the
+# moment it is imported, and crashes when the driver is missing. Binder.start()
+# imports it instead, so PodSim still opens and can offer to install the driver.
 
 from config import pitch_keys  # noqa: E402
+from paths import resource_dir  # noqa: E402
 from podengine import (  # noqa: E402
     apply_deadzone,
     clamp,
@@ -37,26 +40,27 @@ from podengine import (  # noqa: E402
 
 # --- Xbox buttons ------------------------------------------------------------
 
-# Short name for vgamepad's Xbox buttons.
-XB = vg.XUSB_BUTTON
-
-# The names used in config.json -> the real vgamepad button.
+# The names used in config.json -> the name of vgamepad's Xbox button.
+# Binder.start() turns these into the real buttons (vg.XUSB_BUTTON.<name>).
 XBOX_BUTTONS = {
-    "A": XB.XUSB_GAMEPAD_A,
-    "B": XB.XUSB_GAMEPAD_B,
-    "X": XB.XUSB_GAMEPAD_X,
-    "Y": XB.XUSB_GAMEPAD_Y,
-    "LB": XB.XUSB_GAMEPAD_LEFT_SHOULDER,
-    "RB": XB.XUSB_GAMEPAD_RIGHT_SHOULDER,
-    "BACK": XB.XUSB_GAMEPAD_BACK,
-    "START": XB.XUSB_GAMEPAD_START,
-    "LS": XB.XUSB_GAMEPAD_LEFT_THUMB,
-    "RS": XB.XUSB_GAMEPAD_RIGHT_THUMB,
-    "DPAD_UP": XB.XUSB_GAMEPAD_DPAD_UP,
-    "DPAD_RIGHT": XB.XUSB_GAMEPAD_DPAD_RIGHT,
-    "DPAD_DOWN": XB.XUSB_GAMEPAD_DPAD_DOWN,
-    "DPAD_LEFT": XB.XUSB_GAMEPAD_DPAD_LEFT,
+    "A": "XUSB_GAMEPAD_A",
+    "B": "XUSB_GAMEPAD_B",
+    "X": "XUSB_GAMEPAD_X",
+    "Y": "XUSB_GAMEPAD_Y",
+    "LB": "XUSB_GAMEPAD_LEFT_SHOULDER",
+    "RB": "XUSB_GAMEPAD_RIGHT_SHOULDER",
+    "BACK": "XUSB_GAMEPAD_BACK",
+    "START": "XUSB_GAMEPAD_START",
+    "LS": "XUSB_GAMEPAD_LEFT_THUMB",
+    "RS": "XUSB_GAMEPAD_RIGHT_THUMB",
+    "DPAD_UP": "XUSB_GAMEPAD_DPAD_UP",
+    "DPAD_RIGHT": "XUSB_GAMEPAD_DPAD_RIGHT",
+    "DPAD_DOWN": "XUSB_GAMEPAD_DPAD_DOWN",
+    "DPAD_LEFT": "XUSB_GAMEPAD_DPAD_LEFT",
 }
+
+# The ViGEmBus installer that ships with PodSim (drivers/ in the project).
+VIGEM_INSTALLER = "ViGEmBus_1.22.0_x64_x86_arm64.exe"
 
 
 # --- Small helpers -----------------------------------------------------------
@@ -129,22 +133,23 @@ def vigem_driver_installed():
 
 
 def vigem_installer():
-    # The official ViGEmBus installer. vgamepad ships with it, and
-    # podsim.spec copies it into PodSim.exe at the same place inside vgamepad.
-    return Path(vg.__file__).parent / "win" / "vigem" / "install" / "x64" / "ViGEmBusSetup_x64.msi"
+    # The official ViGEmBus 1.22.0 installer (from github.com/nefarius/ViGEmBus).
+    # podsim.spec copies it into PodSim.exe.
+    return resource_dir() / "drivers" / VIGEM_INSTALLER
 
 
 def install_vigem_driver():
     # Start the ViGEmBus installer. Windows asks "allow changes?" first
-    # (installing a driver needs admin). Returns straight away: the installer
-    # keeps running on its own. False if it couldn't start (or "No" was clicked).
-    msi = vigem_installer()
-    if not msi.exists():
+    # (installing a driver needs admin), then the installer's own Next/Install
+    # window appears. Returns straight away: the installer keeps running on
+    # its own. False if it couldn't start (or "No" was clicked).
+    installer = vigem_installer()
+    if not installer.exists():
         return False
     # ShellExecuteW with "runas" = "Run as administrator". It returns a number
     # above 32 when the installer started.
     result = ctypes.windll.shell32.ShellExecuteW(
-        None, "runas", "msiexec", f'/i "{msi}" /passive /norestart', None, 1
+        None, "runas", str(installer), None, None, 1
     )
     return result > 32
 
@@ -165,13 +170,20 @@ class Binder:
         # there and the next step() already uses it. No restart needed.
         self.settings = settings
         self.pad = None
+        self.buttons = {}  # config name -> vgamepad button, filled by start()
         self.left = None
         self.right = None
         pygame.init()
 
     def start(self):
         # "Plug in" the virtual Xbox 360 controller.
-        # Fails (raises an error) if the ViGEmBus driver isn't installed.
+        # Fails (raises an error) if the ViGEmBus driver isn't installed or
+        # isn't running yet, e.g. "VIGEM_ERROR_BUS_NOT_FOUND".
+        import vgamepad as vg  # connects to the driver (see the top of the file)
+
+        self.buttons = {
+            name: getattr(vg.XUSB_BUTTON, button) for name, button in XBOX_BUTTONS.items()
+        }
         self.pad = vg.VX360Gamepad()
 
     def find_sticks(self):
@@ -215,7 +227,7 @@ class Binder:
 
         # --- Buttons ---
         held = held_xbox_buttons(s["buttons"], left_pressed, right_pressed)
-        for name, button in XBOX_BUTTONS.items():
+        for name, button in self.buttons.items():
             set_button(self.pad, button, name in held)
 
         self.pad.update()  # send everything above to Windows, once per lap

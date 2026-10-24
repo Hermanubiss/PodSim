@@ -1139,8 +1139,17 @@ class MainWindow(QMainWindow):
             return
         try:
             self.binder.start()
-        except Exception as error:  # usually: ViGEmBus driver not installed
-            QMessageBox.critical(self, "PodSim", f"Couldn't create the Xbox pad:\n{error}")
+        except Exception as error:  # usually: the driver isn't running yet
+            answer = QMessageBox.question(
+                self, "PodSim",
+                "Couldn't create the virtual Xbox pad: the ViGEmBus driver "
+                "isn't answering.\n\n"
+                "If you just installed it, restart your PC and try again.\n"
+                "Otherwise, reinstalling it usually fixes this (then restart).\n\n"
+                f"Reinstall the driver now?\n\n(Error: {error})",
+            )
+            if answer == QMessageBox.Yes:
+                self.install_driver()
             return
         self.running = True
         self.scan_timer.stop()
@@ -1156,8 +1165,9 @@ class MainWindow(QMainWindow):
         if install_vigem_driver():
             QMessageBox.information(
                 self, "PodSim",
-                "The driver installer is running. When it's finished, "
-                "the ViGEmBus card on Home turns gold and Start works.",
+                "The driver installer is running: click through it.\n\n"
+                "When it's finished, the ViGEmBus card on Home turns gold. "
+                "If Start still doesn't work, restart your PC.",
             )
         else:
             QMessageBox.warning(
