@@ -4,3 +4,4 @@ build/
 dist/
 podsim/config.json
 podsim/profiles/
+*.zip
